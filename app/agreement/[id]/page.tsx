@@ -29,7 +29,10 @@ const translations = {
     noMessages: "Пока нет сообщений",
     writeMessage: "Написать сообщение...",
     sending: "...",
-    sendButton: "Отправить"
+    sendButton: "Отправить",
+    joinToParticipate: "Присоединитесь к договорённости",
+    enterName: "Введите ваше имя *",
+    joinButton: "Присоединиться"
   },
   en: {
     loading: "Loading agreement...",
@@ -55,7 +58,10 @@ const translations = {
     noMessages: "No messages yet",
     writeMessage: "Write a message...",
     sending: "...",
-    sendButton: "Send"
+    sendButton: "Send",
+    joinToParticipate: "Join the agreement",
+    enterName: "Enter your name *",
+    joinButton: "Join"
   }
 };
 
@@ -71,6 +77,7 @@ export default function AgreementPage() {
   const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showJoinForm, setShowJoinForm] = useState(false);
 
   // Состояние чата
   const [newMessage, setNewMessage] = useState('');
@@ -84,17 +91,37 @@ export default function AgreementPage() {
   // Состояние согласия
   const [agreeing, setAgreeing] = useState(false);
 
+  // Форма присоединения
+  const [joinName, setJoinName] = useState('');
+  const [joining, setJoining] = useState(false);
+
   const loadAgreement = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/agreements/${agreementId}?name=${encodeURIComponent(participantName!)}`);
-      const data = await response.json();
+      
+      // Если есть имя участника - проверяем полный доступ
+      if (participantName) {
+        const response = await fetch(`/api/agreements/${agreementId}?name=${encodeURIComponent(participantName)}`);
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Ошибка загрузки');
+        if (response.ok) {
+          setAgreement(data.agreement);
+          setShowJoinForm(false);
+          return;
+        }
       }
 
-      setAgreement(data.agreement);
+      // Иначе получаем публичную информацию
+      const publicResponse = await fetch(`/api/agreements/${agreementId}/public`);
+      const publicData = await publicResponse.json();
+
+      if (!publicResponse.ok) {
+        throw new Error(publicData.error || 'Ошибка загрузки');
+      }
+
+      setAgreement(publicData.agreement);
+      setShowJoinForm(true);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки');
     } finally {
@@ -103,12 +130,44 @@ export default function AgreementPage() {
   }, [agreementId, participantName]);
 
   useEffect(() => {
-    if (!participantName) {
-      setError('Необходимо имя участника');
-      return;
-    }
     loadAgreement();
-  }, [participantName, loadAgreement]);
+  }, [loadAgreement]);
+
+  const handleJoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinName.trim() || joining) return;
+
+    setJoining(true);
+    try {
+      const response = await fetch('/api/agreements/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inviteCode: agreement?.inviteCode,
+          participantName: joinName.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ошибка присоединения');
+      }
+
+      // Обновляем URL с именем участника
+      const url = new URL(window.location.href);
+      url.searchParams.set('name', joinName.trim());
+      window.history.pushState({}, '', url.toString());
+      
+      // Перезагружаем страницу
+      window.location.reload();
+
+    } catch (error: any) {
+      alert('Ошибка: ' + (error.message || 'Что-то пошло не так'));
+    } finally {
+      setJoining(false);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,7 +190,6 @@ export default function AgreementPage() {
         throw new Error(data.error || 'Ошибка отправки');
       }
 
-      // Перезагружаем договорённость
       await loadAgreement();
       setNewMessage('');
     } catch (err) {
@@ -163,7 +221,6 @@ export default function AgreementPage() {
         throw new Error(data.error || 'Ошибка добавления');
       }
 
-      // Перезагружаем договорённость
       await loadAgreement();
       setNewChecklistItem('');
       setNewDeadline('');
@@ -207,9 +264,6 @@ export default function AgreementPage() {
     window.location.reload();
   };
 
-  const currentParticipant = agreement?.participants.find(p => p.name === participantName);
-  const isCreator = agreement && agreement.participants[0]?.name === participantName;
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -241,6 +295,75 @@ export default function AgreementPage() {
       </div>
     );
   }
+
+  // Показать форму присоединения
+  if (showJoinForm) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">
+              {agreement.title}
+            </h1>
+            {agreement.description && (
+              <p className="text-gray-600 mb-4">
+                {agreement.description}
+              </p>
+            )}
+            <p className="text-sm text-gray-500">
+              {t.joinToParticipate}
+            </p>
+          </div>
+          
+          <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+            <h2 className="text-2xl font-bold mb-6 text-center">
+              {t.joinToParticipate}
+            </h2>
+            
+            <form onSubmit={handleJoin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.inviteCode}
+                </label>
+                <input
+                  type="text"
+                  value={agreement.inviteCode}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t.enterName}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={joinName}
+                  onChange={(e) => setJoinName(e.target.value)}
+                  placeholder="Введите ваше имя"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                disabled={joining}
+              >
+                {joining ? 'Присоединение...' : t.joinButton}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Показать полный интерфейс для участников
+  const currentParticipant = agreement?.participants.find(p => p.name === participantName);
+  const isCreator = agreement && agreement.participants[0]?.name === participantName;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -286,23 +409,39 @@ export default function AgreementPage() {
             </div>
           </div>
 
+          {/* Статус */}
+          <div className="mb-4">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              agreement.status === 'agreed' 
+                ? 'bg-green-100 text-green-800'
+                : agreement.status === 'pending'
+                ? 'bg-yellow-100 text-yellow-800'
+                : 'bg-gray-100 text-gray-800'
+            }`}>
+              {agreement.status === 'agreed' ? t.statusAgreed : 
+               agreement.status === 'pending' ? t.statusPending : t.statusDraft}
+            </span>
+          </div>
+
           {/* Участники */}
-          <div className="border-t pt-4">
-            <h3 className="text-lg font-semibold mb-3">{t.participants}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {agreement.participants.map((participant, index) => (
+          <div>
+            <h3 className="text-lg font-semibold mb-2">{t.participants}</h3>
+            <div className="space-y-2">
+              {agreement.participants.map((participant: any, index: number) => (
                 <div key={participant.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div>
-                    <div className="font-medium">{participant.name}</div>
-                    {index === 0 && <div className="text-xs text-blue-600">{t.creator}</div>}
-                  </div>
-                  <div className="text-right">
-                    {participant.hasAgreed ? (
-                      <div className="text-green-600 font-medium">{t.agreed}</div>
-                    ) : (
-                      <div className="text-yellow-600 font-medium">{t.waiting}</div>
+                  <div className="flex items-center">
+                    <span className="font-medium">{participant.name}</span>
+                    {index === 0 && (
+                      <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                        {t.creator}
+                      </span>
                     )}
                   </div>
+                  <span className={`text-sm ${
+                    participant.hasAgreed ? 'text-green-600' : 'text-yellow-600'
+                  }`}>
+                    {participant.hasAgreed ? t.agreed : t.waiting}
+                  </span>
                 </div>
               ))}
             </div>
@@ -310,144 +449,91 @@ export default function AgreementPage() {
 
           {/* Кнопка согласия */}
           {currentParticipant && !currentParticipant.hasAgreed && (
-            <div className="border-t pt-4 mt-4">
+            <div className="mt-6">
               <button
                 onClick={handleAgree}
                 disabled={agreeing}
-                className="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 disabled:opacity-50 font-medium"
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
               >
                 {agreeing ? t.confirming : t.agreeButton}
               </button>
             </div>
           )}
-
-          {/* Статус договорённости */}
-          <div className="border-t pt-4 mt-4">
-            <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-              agreement.status === 'agreed' 
-                ? 'bg-green-100 text-green-800'
-                : agreement.status === 'pending'
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}>
-              {agreement.status === 'agreed' && t.statusAgreed}
-              {agreement.status === 'pending' && t.statusPending}
-              {agreement.status === 'draft' && t.statusDraft}
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Чек-лист */}
+          {/* Чек-лист условий */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">{t.checklist}</h2>
+            <h2 className="text-xl font-bold mb-4">{t.checklist}</h2>
             
-            {/* Форма добавления пункта */}
-            <form onSubmit={handleAddChecklistItem} className="mb-4 p-4 bg-gray-50 rounded-md">
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={newChecklistItem}
-                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                  placeholder={t.addCondition}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="date"
-                  value={newDeadline}
-                  onChange={(e) => setNewDeadline(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="submit"
-                  disabled={addingItem || !newChecklistItem.trim()}
-                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {addingItem ? t.adding : t.addButton}
-                </button>
-              </div>
-            </form>
-
-            {/* Список пунктов */}
-            <div className="space-y-3">
-              {agreement.checklist.length === 0 ? (
-                <div className="text-gray-500 text-center py-4">
-                  {t.noConditions}
-                </div>
-              ) : (
-                agreement.checklist.map((item) => (
-                  <div key={item.id} className="p-3 border border-gray-200 rounded-md">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className={`${item.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                          {item.text}
+            {agreement.checklist && agreement.checklist.length > 0 ? (
+              <div className="space-y-3 mb-4">
+                {agreement.checklist.map((item: any) => (
+                  <div key={item.id} className="flex items-start p-3 bg-gray-50 rounded-md">
+                    <div className="flex-1">
+                      <div className="font-medium">{item.text}</div>
+                      {item.deadline && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          {t.deadline} {new Date(item.deadline).toLocaleDateString()}
                         </div>
-                        {item.deadline && (
-                          <div className="text-sm text-gray-600 mt-1">
-                            {t.deadline} {new Date(item.deadline).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')}
-                          </div>
-                        )}
-                      </div>
-                      <div className="ml-3">
-                        {item.isCompleted ? (
-                          <span className="text-green-600 font-medium">✓</span>
-                        ) : (
-                          <span className="text-yellow-600 font-medium">○</span>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 mb-4">{t.noConditions}</p>
+            )}
+
+            <form onSubmit={handleAddChecklistItem} className="space-y-3">
+              <textarea
+                value={newChecklistItem}
+                onChange={(e) => setNewChecklistItem(e.target.value)}
+                placeholder={t.addCondition}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={2}
+              />
+              
+              <input
+                type="date"
+                value={newDeadline}
+                onChange={(e) => setNewDeadline(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              
+              <button
+                type="submit"
+                disabled={addingItem || !newChecklistItem.trim()}
+                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {addingItem ? t.adding : t.addButton}
+              </button>
+            </form>
           </div>
 
           {/* Чат */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">{t.chat}</h2>
+            <h2 className="text-xl font-bold mb-4">{t.chat}</h2>
             
-            {/* Сообщения */}
-            <div className="h-64 overflow-y-auto mb-4 border border-gray-200 rounded-md p-3 bg-gray-50">
-              {agreement.chat.length === 0 ? (
-                <div className="text-gray-500 text-center py-8">
-                  {t.noMessages}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {agreement.chat.map((message) => (
-                    <div key={message.id} className={`${
-                      message.senderName === participantName 
-                        ? 'text-right' 
-                        : 'text-left'
-                    }`}>
-                      <div className={`inline-block max-w-xs lg:max-w-md p-3 rounded-lg ${
-                        message.senderName === participantName
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-gray-300'
-                      }`}>
-                        <div className="text-sm font-medium mb-1">
-                          {message.senderName}
-                        </div>
-                        <div>{message.content}</div>
-                        <div className={`text-xs mt-1 ${
-                          message.senderName === participantName 
-                            ? 'text-blue-100' 
-                            : 'text-gray-500'
-                        }`}>
-                          {new Date(message.timestamp).toLocaleTimeString(language === 'ru' ? 'ru-RU' : 'en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </div>
-                      </div>
+            {agreement.chat && agreement.chat.length > 0 ? (
+              <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                {agreement.chat.map((message: any) => (
+                  <div key={message.id} className="p-3 bg-gray-50 rounded-md">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium text-sm">{message.senderName}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(message.timestamp).toLocaleString()}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <div className="text-gray-800">{message.content}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 mb-4">{t.noMessages}</p>
+            )}
 
-            {/* Форма отправки сообщения */}
-            <form onSubmit={handleSendMessage} className="flex gap-2">
+            <form onSubmit={handleSendMessage} className="flex space-x-2">
               <input
                 type="text"
                 value={newMessage}

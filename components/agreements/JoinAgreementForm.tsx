@@ -34,7 +34,7 @@ export default function JoinAgreementForm() {
       
       // Перенаправляем на страницу договорённости
       setTimeout(() => {
-        router.push(`/agreements/${data.agreement.id}?name=${encodeURIComponent(formData.participantName)}`);
+        router.push(`/agreement/${data.agreement.id}?name=${encodeURIComponent(formData.participantName)}`);
       }, 1000);
 
     } catch (error: any) {
