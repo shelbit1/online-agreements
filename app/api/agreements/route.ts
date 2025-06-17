@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// In-memory хранилище (сброс при перезапуске сервера)
-const agreements = new Map<string, any>();
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 12);
-}
-
-function generateInviteCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
+import { agreements, generateId, generateInviteCode } from '@/lib/store/agreements';
 
 // POST - создать новую договорённость
 export async function POST(request: NextRequest) {
@@ -65,5 +55,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Экспортируем хранилище для других API
-export { agreements }; 
+ 

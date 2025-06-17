@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Agreement } from '@/lib/types';
 
@@ -84,15 +84,7 @@ export default function AgreementPage() {
   // Состояние согласия
   const [agreeing, setAgreeing] = useState(false);
 
-  useEffect(() => {
-    if (!participantName) {
-      setError('Необходимо имя участника');
-      return;
-    }
-    loadAgreement();
-  }, [agreementId, participantName]);
-
-  const loadAgreement = async () => {
+  const loadAgreement = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/agreements/${agreementId}?name=${encodeURIComponent(participantName!)}`);
@@ -108,7 +100,15 @@ export default function AgreementPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [agreementId, participantName]);
+
+  useEffect(() => {
+    if (!participantName) {
+      setError('Необходимо имя участника');
+      return;
+    }
+    loadAgreement();
+  }, [participantName, loadAgreement]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

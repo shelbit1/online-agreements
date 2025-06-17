@@ -1,20 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Импортируем хранилище из основного API
-let agreements: Map<string, any>;
-
-// Получаем ссылку на хранилище
-try {
-  const store = require('../route');
-  agreements = store.agreements;
-} catch {
-  // Fallback если модуль не загружен
-  agreements = new Map();
-}
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 12);
-}
+import { agreements, generateId } from '@/lib/store/agreements';
 
 // POST - присоединиться к договорённости по коду
 export async function POST(request: NextRequest) {

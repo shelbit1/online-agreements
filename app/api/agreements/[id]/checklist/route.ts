@@ -1,26 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Импортируем хранилище из основного API
-let agreements: Map<string, any>;
-
-// Получаем ссылку на хранилище
-try {
-  const store = require('../../route');
-  agreements = store.agreements;
-} catch {
-  // Fallback если модуль не загружен
-  agreements = new Map();
-}
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 12);
-}
+import { agreements, generateId } from '@/lib/store/agreements';
 
 // POST - добавить пункт в чек-лист
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const { text, deadline, participantName } = await request.json();
 
@@ -32,7 +18,7 @@ export async function POST(
       );
     }
 
-    const agreement = agreements.get(params.id);
+    const agreement = agreements.get(id);
 
     if (!agreement) {
       return NextResponse.json(
@@ -65,7 +51,7 @@ export async function POST(
     // Добавляем в чек-лист
     agreement.checklist.push(newItem);
     
-    agreements.set(params.id, agreement);
+    agreements.set(id, agreement);
 
     return NextResponse.json({
       message: 'Пункт добавлен в чек-лист',

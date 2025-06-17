@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Импортируем хранилище из основного API
-let agreements: Map<string, any>;
-
-// Получаем ссылку на хранилище
-try {
-  const store = require('../route');
-  agreements = store.agreements;
-} catch {
-  // Fallback если модуль не загружен
-  agreements = new Map();
-}
+import { agreements } from '@/lib/store/agreements';
 
 // GET - получить договорённость по ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const searchParams = request.nextUrl.searchParams;
     const participantName = searchParams.get('name');
@@ -28,7 +18,7 @@ export async function GET(
       );
     }
 
-    const agreement = agreements.get(params.id);
+    const agreement = agreements.get(id);
 
     if (!agreement) {
       return NextResponse.json(
@@ -63,8 +53,9 @@ export async function GET(
 // PUT - обновить договорённость
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const { title, description, participantName } = await request.json();
 
@@ -75,7 +66,7 @@ export async function PUT(
       );
     }
 
-    const agreement = agreements.get(params.id);
+    const agreement = agreements.get(id);
 
     if (!agreement) {
       return NextResponse.json(
@@ -96,7 +87,7 @@ export async function PUT(
     agreement.title = title;
     agreement.description = description;
     
-    agreements.set(params.id, agreement);
+    agreements.set(id, agreement);
 
     return NextResponse.json({
       message: 'Договорённость обновлена',
